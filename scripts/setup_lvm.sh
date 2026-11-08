@@ -5,11 +5,12 @@ TARGET_DEVICE="${TARGET_DEVICE:-/dev/sdb}"
 VG_NAME="vg_rag"
 LV_DB_NAME="lv_db"
 LV_MODELS_NAME="lv_models"
+SNAP_NAME="lv_db_snapshot"
 
 MOUNT_DB="/data/db"
 MOUNT_MODELS="/models"
 
-echo "=== Verifying LVM Volume Group ==="
+echo "=== [1/4] Checking LVM Volume Group ==="
 if ! sudo vgs "$VG_NAME" > /dev/null 2>&1; then
     echo "Creating PV on $TARGET_DEVICE and VG $VG_NAME..."
     sudo pvcreate "$TARGET_DEVICE"
@@ -18,7 +19,7 @@ else
     echo "Volume group $VG_NAME already exists. Skipping VG creation."
 fi
 
-echo "=== Verifying Logical Volumes ==="
+echo "=== [2/4] Checking Logical Volumes ==="
 if ! sudo lvs "$VG_NAME/$LV_DB_NAME" > /dev/null 2>&1; then
     echo "Creating $LV_DB_NAME (15G)..."
     sudo lvcreate -L 15G -n "$LV_DB_NAME" "$VG_NAME"
@@ -35,7 +36,7 @@ else
     echo "Logical volume $LV_MODELS_NAME already exists."
 fi
 
-echo "=== Configuring Persistent Mounts in /etc/fstab ==="
+echo "=== [3/4] Configuring Persistent Mounts in /etc/fstab ==="
 sudo mkdir -p "$MOUNT_DB" "$MOUNT_MODELS"
 
 if ! grep -qs "$MOUNT_DB" /etc/fstab; then
@@ -47,3 +48,14 @@ if ! grep -qs "$MOUNT_MODELS" /etc/fstab; then
 fi
 
 sudo mount -a
+
+echo "=== [4/4] Creating LVM Snapshot for Verification ==="
+if ! sudo lvs "$VG_NAME/$SNAP_NAME" > /dev/null 2>&1; then
+    echo "Creating snapshot $SNAP_NAME..."
+    sudo lvcreate --size 2G --snapshot --name "$SNAP_NAME" "/dev/$VG_NAME/$LV_DB_NAME"
+else
+    echo "Snapshot $SNAP_NAME already exists."
+fi
+
+echo "=== LVM Status ==="
+sudo lvs
