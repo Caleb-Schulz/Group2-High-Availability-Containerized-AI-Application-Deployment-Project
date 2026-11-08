@@ -6,6 +6,9 @@ VG_NAME="vg_rag"
 LV_DB_NAME="lv_db"
 LV_MODELS_NAME="lv_models"
 
+MOUNT_DB="/data/db"
+MOUNT_MODELS="/models"
+
 echo "=== Verifying LVM Volume Group ==="
 if ! sudo vgs "$VG_NAME" > /dev/null 2>&1; then
     echo "Creating PV on $TARGET_DEVICE and VG $VG_NAME..."
@@ -31,3 +34,16 @@ if ! sudo lvs "$VG_NAME/$LV_MODELS_NAME" > /dev/null 2>&1; then
 else
     echo "Logical volume $LV_MODELS_NAME already exists."
 fi
+
+echo "=== Configuring Persistent Mounts in /etc/fstab ==="
+sudo mkdir -p "$MOUNT_DB" "$MOUNT_MODELS"
+
+if ! grep -qs "$MOUNT_DB" /etc/fstab; then
+    echo "/dev/$VG_NAME/$LV_DB_NAME $MOUNT_DB ext4 defaults,nofail 0 2" | sudo tee -a /etc/fstab
+fi
+
+if ! grep -qs "$MOUNT_MODELS" /etc/fstab; then
+    echo "/dev/$VG_NAME/$LV_MODELS_NAME $MOUNT_MODELS ext4 defaults,nofail 0 2" | sudo tee -a /etc/fstab
+fi
+
+sudo mount -a
