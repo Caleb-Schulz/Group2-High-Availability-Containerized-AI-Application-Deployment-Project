@@ -1,5 +1,6 @@
 import os
 import glob
+import time
 import requests
 import uuid
 from qdrant_client import QdrantClient
@@ -8,22 +9,58 @@ from qdrant_client.http.models import Distance, VectorParams, PointStruct
 QDRANT_HOST = os.getenv("QDRANT_HOST", "http://localhost:6333")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "knowledge_base")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
-VECTOR_DIM = int(os.getenv("VECTOR_DIM", "768"))
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text") # Will need to be updated to match final model
+VECTOR_DIM = int(os.getenv("VECTOR_DIM", "768")) # Will need to be updated to match final model
 DOCS_DIR = os.getenv("DOCS_DIR", os.path.join(os.path.dirname(__file__), "documents"))
 
-def get_embedding(text: str) -> list:
-    resp = requests.post(
-        f"{OLLAMA_HOST}/api/embeddings",
-        json={"model": EMBEDDING_MODEL, "prompt": text},
-        timeout=30
-    )
-    resp.raise_for_status()
-    return resp.json()["embedding"]
+def wait_for_services(max_attempts: int = 30, delay: int = 2):
+    # Ensure both Qdrant and Ollama are reachable before starting ingestion
+    print("Verifying backend services readiness...")
+    client = QdrantClient(url=QDRANT_HOST)
+    
+    # Check Qdrant
+    for attempt in range(max_attempts):
+        try:
+            client.get_collections()
+            print("Qdrant connection established.")
+            break
+        except Exception:
+            if attempt == max_attempts - 1:
+                raise RuntimeError(f"Could not connect to Qdrant at {QDRANT_HOST} after {max_attempts} attempts.")
+            time.sleep(delay)
+
+    # Check Ollama
+    for attempt in range(max_attempts):
+        try:
+            res = requests.get(f"{OLLAMA_HOST}/", timeout=5)
+            if res.status_code == 200:
+                print("Ollama connection established.")
+                return client
+        except Exception:
+            pass
+        if attempt == max_attempts - 1:
+            raise RuntimeError(f"Could not connect to Ollama at {OLLAMA_HOST} after {max_attempts} attempts.")
+        time.sleep(delay)
+
+    return client
+
+def get_embedding(text: str, retries: int = 3) -> list:
+    for attempt in range(retries):
+        try:
+            resp = requests.post(
+                f"{OLLAMA_HOST}/api/embeddings",
+                json={"model": EMBEDDING_MODEL, "prompt": text},
+                timeout=45
+            )
+            resp.raise_for_status()
+            return resp.json()["embedding"]
+        except Exception as e:
+            if attempt == retries - 1:
+                raise RuntimeError(f"Failed to generate embedding: {e}")
+            time.sleep(2 ** attempt)
 
 def main():
-    print(f"Connecting to Qdrant at {QDRANT_HOST}...")
-    client = QdrantClient(url=QDRANT_HOST)
+    client = wait_for_services()
 
     # Idempotently create collection if it does not exist
     collections = [c.name for c in client.get_collections().collections]
@@ -63,10 +100,7 @@ def main():
         for idx, chunk in enumerate(chunks):
             # Deterministic UUID ensures reruns overwrite without creating duplicates
             point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{filename}_{idx}"))
-            try:
-                vec = get_embedding(chunk)
-            except Exception:
-                vec = [0.0] * VECTOR_DIM
+            vec = get_embedding(chunk)
 
             points.append(PointStruct(
                 id=point_id,
