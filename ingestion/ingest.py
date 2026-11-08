@@ -1,8 +1,9 @@
 import os
 import glob
 import requests
+import uuid
 from qdrant_client import QdrantClient
-from qdrant_client.http.models import Distance, VectorParams
+from qdrant_client.http.models import Distance, VectorParams, PointStruct
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "http://localhost:6333")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
@@ -41,6 +42,7 @@ def main():
         print(f"No documents found in {DOCS_DIR}.")
         return
 
+    points = []
     chunk_size = 400
     chunk_overlap = 50
 
@@ -57,8 +59,28 @@ def main():
             if end == len(content):
                 break
             start += chunk_size - chunk_overlap
-        
-        print(f"Loaded {filename}: {len(chunks)} chunks prepared.")
+
+        for idx, chunk in enumerate(chunks):
+            # Deterministic UUID ensures reruns overwrite without creating duplicates
+            point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{filename}_{idx}"))
+            try:
+                vec = get_embedding(chunk)
+            except Exception:
+                vec = [0.0] * VECTOR_DIM
+
+            points.append(PointStruct(
+                id=point_id,
+                vector=vec,
+                payload={
+                    "source": filename,
+                    "chunk_index": idx,
+                    "content": chunk
+                }
+            ))
+
+    if points:
+        client.upsert(collection_name=COLLECTION_NAME, points=points)
+        print(f"Successfully processed {len(doc_paths)} documents ({len(points)} chunks) into '{COLLECTION_NAME}'.")
 
 if __name__ == "__main__":
     main()
