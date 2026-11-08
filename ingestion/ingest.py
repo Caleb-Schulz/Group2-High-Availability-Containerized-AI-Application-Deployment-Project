@@ -1,4 +1,6 @@
 import os
+import glob
+import requests
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 
@@ -9,10 +11,20 @@ EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text")
 VECTOR_DIM = int(os.getenv("VECTOR_DIM", "768"))
 DOCS_DIR = os.getenv("DOCS_DIR", os.path.join(os.path.dirname(__file__), "documents"))
 
+def get_embedding(text: str) -> list:
+    resp = requests.post(
+        f"{OLLAMA_HOST}/api/embeddings",
+        json={"model": EMBEDDING_MODEL, "prompt": text},
+        timeout=30
+    )
+    resp.raise_for_status()
+    return resp.json()["embedding"]
+
 def main():
     print(f"Connecting to Qdrant at {QDRANT_HOST}...")
     client = QdrantClient(url=QDRANT_HOST)
 
+    # Idempotently create collection if it does not exist
     collections = [c.name for c in client.get_collections().collections]
     if COLLECTION_NAME not in collections:
         print(f"Creating collection '{COLLECTION_NAME}' (dim={VECTOR_DIM})...")
@@ -22,6 +34,31 @@ def main():
         )
     else:
         print(f"Collection '{COLLECTION_NAME}' already initialized.")
+    
+    # Process text documents
+    doc_paths = sorted(glob.glob(os.path.join(DOCS_DIR, "*.txt")))
+    if not doc_paths:
+        print(f"No documents found in {DOCS_DIR}.")
+        return
+
+    chunk_size = 400
+    chunk_overlap = 50
+
+    for path in doc_paths:
+        filename = os.path.basename(path)
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+
+        chunks = []
+        start = 0
+        while start < len(content):
+            end = min(start + chunk_size, len(content))
+            chunks.append(content[start:end])
+            if end == len(content):
+                break
+            start += chunk_size - chunk_overlap
+        
+        print(f"Loaded {filename}: {len(chunks)} chunks prepared.")
 
 if __name__ == "__main__":
     main()
