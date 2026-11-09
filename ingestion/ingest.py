@@ -6,7 +6,7 @@ import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams, PointStruct
 
-QDRANT_HOST = os.getenv("QDRANT_HOST", "http://localhost:6333")
+QDRANT_HOST = os.getenv("QDRANT_HOST", "http://qdrant:6333")
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "knowledge_base")
 EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text") # Will need to be updated to match final model
