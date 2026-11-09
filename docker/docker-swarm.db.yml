@@ -1,0 +1,38 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.12.1
+    ports:
+      - target: 6333
+        published: 6333
+        protocol: tcp
+        mode: host
+    volumes:
+      - type: bind
+        source: /data/db
+        target: /qdrant/storage
+    networks:
+      - rag_internal
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__STORAGE__PERFORMANCE__MAX_SEARCH_THREADS=2
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1024M
+
+networks:
+  rag_internal:
+    driver: overlay
+    attachable: true
+    internal: true
