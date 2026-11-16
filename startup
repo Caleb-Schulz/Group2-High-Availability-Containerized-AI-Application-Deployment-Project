@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# General startup script
+
+# Run docker startup script
+
+# Set file permissions to be a runable script
+chmod 755 ./docker/dockerStartup
+./docker/dockerStartup
