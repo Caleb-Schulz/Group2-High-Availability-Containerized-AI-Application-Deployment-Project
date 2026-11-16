@@ -1,5 +1,4 @@
-# GROUP 2 - COMPUTE ENGINE INFRASTRUCTURE (Five VMs across three application tiers)
-
+# GROUP 2 - THREE VM ARCHITECTURE
 
 locals {
   nodes = {
@@ -10,21 +9,7 @@ locals {
       boot_size    = 20
     }
 
-    web-02 = {
-      machine_type = "e2-medium"
-      subnet       = google_compute_subnetwork.web_subnet.id
-      tags         = ["web-server"]
-      boot_size    = 20
-    }
-
     ai-01 = {
-      machine_type = "e2-standard-4"
-      subnet       = google_compute_subnetwork.ai_subnet.id
-      tags         = ["ai-server"]
-      boot_size    = 30
-    }
-
-    ai-02 = {
       machine_type = "e2-standard-4"
       subnet       = google_compute_subnetwork.ai_subnet.id
       tags         = ["ai-server"]
@@ -60,9 +45,6 @@ resource "google_compute_instance" "nodes" {
 
   network_interface {
     subnetwork = each.value.subnet
-
-    # No public IP addresses.
-    # Outbound internet access will use Cloud NAT.
   }
 
   metadata = {
@@ -95,8 +77,6 @@ resource "google_compute_instance" "nodes" {
     google_compute_subnetwork.db_subnet
   ]
 }
-
-# OUTPUTS
 
 output "vm_private_ips" {
   description = "Private IP addresses of all Group 2 VMs"

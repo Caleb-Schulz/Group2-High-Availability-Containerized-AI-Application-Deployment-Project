@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Terraform state and sensitive local configuration
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
